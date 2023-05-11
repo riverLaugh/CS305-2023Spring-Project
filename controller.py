@@ -20,6 +20,8 @@ class ControllerApp(app_manager.RyuApp):
 
     @set_ev_cls(event.EventSwitchEnter)
     def handle_switch_add(self, ev):
+
+
         """
         Event handler indicating a switch has come online.
         """
@@ -74,7 +76,8 @@ class ControllerApp(app_manager.RyuApp):
             pkt_dhcp = pkt.get_protocols(dhcp.dhcp)
             inPort = msg.in_port
             if not pkt_dhcp:
-                # TODO: handle other protocols like ARP 
+                # TODO: handle other protocols like ARP
+
                 pass
             else:
                 DHCPServer.handle_dhcp(datapath, inPort, pkt)      

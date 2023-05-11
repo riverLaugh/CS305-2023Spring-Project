@@ -26,13 +26,15 @@ class DHCPServer():
 
     @classmethod
     def assemble_ack(cls, pkt, datapath, port):
+        ack_pkt = 0
         # TODO: Generate DHCP ACK packet here
+
         return ack_pkt
 
     @classmethod
     def assemble_offer(cls, pkt, datapath):
         # TODO: Generate DHCP OFFER packet here
-
+        pass
 
     @classmethod
     def handle_dhcp(cls, datapath, port, pkt):
@@ -40,7 +42,7 @@ class DHCPServer():
         # You may choose a valid IP from IP pool and genereate DHCP OFFER packet
         # Or generate a DHCP ACK packet
         # Finally send the generated packet to the host by using _send_packet method
-
+        pass
     @classmethod
     def _send_packet(cls, datapath, port, pkt):
         ofproto = datapath.ofproto
