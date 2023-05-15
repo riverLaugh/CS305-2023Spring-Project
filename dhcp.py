@@ -26,7 +26,6 @@ class DHCPServer():
 
     @classmethod
     def assemble_ack(cls, pkt, datapath, port):
-        ack_pkt = 0
         # TODO: Generate DHCP ACK packet here
         dhcp_pkt = dhcp.dhcp(
             op=dhcp.DHCP_BOOT_REPLY,  # DHCP operation code (reply)
@@ -47,7 +46,7 @@ class DHCPServer():
             src_port=67,  # Source port (server)
             dst_port=68  # Destination port (client)
         )
-        udp_pkt = pkt.encode()
+        udp_pkt = udp_pkt.encode()
         udp_pkt.serialize()
 
         # Create IPv4 packet
@@ -72,21 +71,10 @@ class DHCPServer():
         udp_pkt.set_payload(dhcp_pkt)
         packet_data = eth_pkt.serialize()
         return packet_data
-        return pkt
-
 
     @classmethod
     def assemble_offer(cls, pkt, datapath):
         # TODO: Generate DHCP OFFER packet here
-
-        pass
-
-    @classmethod
-    def handle_dhcp(cls, datapath, port, pkt):
-        # TODO: Specify the type of received DHCP packet
-        # You may choose a valid IP from IP pool and genereate DHCP OFFER packet
-        # Or generate a DHCP ACK packet
-        # Finally send the generated packet to the host by using _send_packet method
         dhcp_pkt = dhcp.dhcp(
             op=dhcp.DHCP_BOOT_REPLY,  # DHCP operation code (reply)
             chaddr='12:34:56:78:90:ab',  # Client MAC address
@@ -106,7 +94,7 @@ class DHCPServer():
             src_port=67,  # Source port (server)
             dst_port=68  # Destination port (client)
         )
-        udp_pkt = pkt.encode()
+        udp_pkt = udp_pkt.encode()
         udp_pkt.serialize()
 
         # Create IPv4 packet
@@ -139,7 +127,7 @@ class DHCPServer():
             # DHCP DISCOVER packet received
             # You may choose an available IP from the IP pool and generate DHCP OFFER packet
             # Then send the generated packet to the host
-            offer_pkt = cls.assemble_offer(dhcp_pkt,datapath)
+            offer_pkt = cls.assemble_offer(dhcp_pkt, datapath)
             cls._send_packet(datapath, port, offer_pkt)
         elif dhcp_pkt.option_dhcp_message_type == dhcp.DHCP_REQUEST:
             # DHCP REQUEST packet received
