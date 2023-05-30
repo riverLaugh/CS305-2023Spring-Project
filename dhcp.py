@@ -10,7 +10,7 @@ class Config():
     controller_macAddr = '7e:49:b3:f0:f9:99'  # don't modify, a dummy mac address for fill the mac enrty
     dns = '8.8.8.8'  # don't modify, just for the dns entry
     start_ip = '192.168.1.2'  # can be modified
-    end_ip = '192.168.1.100'  # can be modified
+    end_ip = '192.168.1.255'  # can be modified
     netmask = '255.255.255.0'  # can be modified
 
     # You may use above attributes to configure your DHCP server.
@@ -18,131 +18,181 @@ class Config():
 
 
 class DHCPServer():
+    ip_xid_map = {}
+    current_ip = {}
     hardware_addr = Config.controller_macAddr
     start_ip = Config.start_ip
     end_ip = Config.end_ip
     netmask = Config.netmask
     dns = Config.dns
+    start = start_ip.split('.')
+    end = end_ip.split('.')
+    startnum = int(start[3])
+    endnum = int(end[3])
+    ip_pool = []
+    for i in range(2, 255):
+        ip_pool.append('192.168.1.' + str(i))
 
     @classmethod
-    def assemble_ack(cls, pkt, datapath, port):
+    def assemble_ack(cls, datapath, port, pkt):
         # TODO: Generate DHCP ACK packet here
+        # dhcp_pkt = dhcp.dhcp(
+        #     op=dhcp.DHCP_BOOT_REPLY,  # DHCP operation code (reply)
+        #     chaddr=pkt.get_protocol(ethernet.ethernet).src,  # Client MAC address
+        #     xid=pkt.get_protocol(dhcp.dhcp).xid,  # Transaction ID
+        #     yiaddr=cls.ip_xid_map[pkt.get_protocol(dhcp.dhcp).xid],  # Offered IP address
+        #     options=dhcp.options(option_list=[
+        #         dhcp.option(tag=53, value=b'\x05'),
+        #         dhcp.option(tag=1, value=b'255.255.255.0'),
+        #         dhcp.option(tag=3, value=b'192.128.1.1'),
+        #         dhcp.option(tag=6, value=addrconv.ipv4.text_to_bin(cls.dns)),
+        #         dhcp.option(tag=51, value=b'\x00\x00\x00\x0a'),
+        #         dhcp.option(tag=54, value=addrconv.ipv4.text_to_bin('192.168.2.1'))
+        #     ]
+        #     )
+        # )
+        dhcp_pkt = pkt.get_protocol(dhcp.dhcp)
+        wnt = 0
+        for opt in pkt.get_protocol(dhcp.dhcp).options.option_list:
+            if opt.tag == 50:
+                wnt = addrconv.ipv4.bin_to_text(opt.value)
+
+        dhcp_pkt.options.option_list.remove(
+            next(opt for opt in dhcp_pkt.options.option_list if opt.tag == 53))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=1, value=b'255.255.255.0'))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=3, value=b'192.128.1.1'))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=6, value=addrconv.ipv4.text_to_bin(cls.dns)))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=12, value='fuck'))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=53, value=b'\x05'))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=54, value=addrconv.ipv4.text_to_bin('192.168.2.1')))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=51, value=b'\x00\x00\x00\x0a'))
+
         dhcp_pkt = dhcp.dhcp(
             op=dhcp.DHCP_BOOT_REPLY,  # DHCP operation code (reply)
-            chaddr='12:34:56:78:90:ab',  # Client MAC address
-            xid=123456789,  # Transaction ID
-            yiaddr='192.168.0.100',  # Offered IP address
-            options=[
-                (dhcp.DHCP_ACK, b'\x02'),  # DHCP Message Type: ack
-                (dhcp.DHCP_SERVER_IDENTIFIER_OPT, '192.168.0.1'),  # DHCP Server Identifier
-                (dhcp.DHCP_GATEWAY_ADDR_OPT, '192.168.0.1'),  # Router (gateway) IP address
-                (dhcp.DHCP_SUBNET_MASK_OPT, '255.255.255.0'),  # Subnet mask
-                (dhcp.DHCP_IP_ADDR_LEASE_TIME_OPT, b'\x00\x00\x1c\x20'),  # Lease time: 7200 seconds
-                (dhcp.DHCP_END_OPT, b'')  # End option
-            ]
+            chaddr=pkt.get_protocol(ethernet.ethernet).src,  # Client MAC address
+            xid=pkt.get_protocol(dhcp.dhcp).xid,  # Transaction ID
+            yiaddr=wnt  # Offered IP address
         )
+
         # Create UDP packet
         udp_pkt = udp.udp(
             src_port=67,  # Source port (server)
             dst_port=68  # Destination port (client)
         )
-        udp_pkt = udp_pkt.encode()
-        udp_pkt.serialize()
-
         # Create IPv4 packet
         ipv4_pkt = ipv4.ipv4(
-            src='192.168.0.1',  # Source IP address (server)
+            src='192.168.1.1',  # Source IP address (server)
             dst='255.255.255.255',  # Destination IP address (broadcast)
             proto=17  # Protocol (UDP)
         )
-        ipv4_pkt = ipv4_pkt.encode()
-        ipv4_pkt.serialize()
-
         # Create Ethernet packet
         eth_pkt = ethernet.ethernet(
-            src='11:22:33:44:55:66',  # Source MAC address (server)
-            dst='12:34:56:78:90:ab',  # Destination MAC address (client)
-            ethertype=ethernet.ether.ETH_TYPE_IP  # EtherType (IPv4)
+            src='2c:8d:b1:6d:e6:0b',  # Source MAC address (server)
+            dst=pkt.get_protocol(ethernet.ethernet).dst,  # Destination MAC address (client)
+            ethertype=pkt.get_protocol(ethernet.ethernet).ethertype  # EtherType (IPv4)
         )
-        eth_pkt.serialize()
         # Assemble the packets
-        eth_pkt.set_payload(ipv4_pkt)
-        ipv4_pkt.set_payload(udp_pkt)
-        udp_pkt.set_payload(dhcp_pkt)
-        packet_data = eth_pkt.serialize()
-        return packet_data
+        packet2 = packet.Packet()
+        packet2.add_protocol(eth_pkt)
+        packet2.add_protocol(ipv4_pkt)
+        packet2.add_protocol(udp_pkt)
+        packet2.add_protocol(dhcp_pkt)
+        print('ACK:')
+        print(cls.ip_xid_map[pkt.get_protocol(dhcp.dhcp).xid])
+        return packet2
 
     @classmethod
     def assemble_offer(cls, pkt, datapath):
         # TODO: Generate DHCP OFFER packet here
+        # print('++++++++++')
+        dhcp_pkt = pkt.get_protocol(dhcp.dhcp)
+        dhcp_pkt.options.option_list.remove(
+            next(opt for opt in dhcp_pkt.options.option_list if opt.tag == 53))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=1, value=b'255.255.255.0'))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=3, value=b'192.128.1.1'))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=6, value=addrconv.ipv4.text_to_bin(cls.dns)))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=12, value='fuck'))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=53, value=b'\x02'))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=54, value=addrconv.ipv4.text_to_bin('192.168.2.1')))
+        dhcp_pkt.options.option_list.insert(
+            0, dhcp.option(tag=51, value=b'\x00\x00\x00\x0a'))
+
         dhcp_pkt = dhcp.dhcp(
             op=dhcp.DHCP_BOOT_REPLY,  # DHCP operation code (reply)
-            chaddr='12:34:56:78:90:ab',  # Client MAC address
-            xid=123456789,  # Transaction ID
-            yiaddr='192.168.0.100',  # Offered IP address
-            options=[
-                (dhcp.DHCP_OFFER, b'\x02'),  # DHCP Message Type: Offer
-                (dhcp.DHCP_SERVER_IDENTIFIER_OPT, '192.168.0.1'),  # DHCP Server Identifier
-                (dhcp.DHCP_GATEWAY_ADDR_OPT, '192.168.0.1'),  # Router (gateway) IP address
-                (dhcp.DHCP_SUBNET_MASK_OPT, '255.255.255.0'),  # Subnet mask
-                (dhcp.DHCP_IP_ADDR_LEASE_TIME_OPT, b'\x00\x00\x1c\x20'),  # Lease time: 7200 seconds
-                (dhcp.DHCP_END_OPT, b'')  # End option
-            ]
+            chaddr=pkt.get_protocol(ethernet.ethernet).src,  # Client MAC address
+            xid=pkt.get_protocol(dhcp.dhcp).xid,  # Transaction ID
+            yiaddr=cls.ip_pool[0],  # Offered IP address
+            hlen=6,
+            siaddr='192.168.1.0'
         )
+
+        cls.ip_xid_map[pkt.get_protocol(dhcp.dhcp).xid] = cls.ip_pool[0]
+        print('offer:')
+        print(cls.ip_pool[0])
+        # print('_______________________')
+        del cls.ip_pool[0]
         # Create UDP packet
         udp_pkt = udp.udp(
             src_port=67,  # Source port (server)
             dst_port=68  # Destination port (client)
         )
-        udp_pkt = udp_pkt.encode()
-        udp_pkt.serialize()
-
         # Create IPv4 packet
         ipv4_pkt = ipv4.ipv4(
-            src='192.168.0.1',  # Source IP address (server)
+            src='192.168.1.1',  # Source IP address (server)
             dst='255.255.255.255',  # Destination IP address (broadcast)
             proto=17  # Protocol (UDP)
         )
-        ipv4_pkt = ipv4_pkt.encode()
-        ipv4_pkt.serialize()
-
         # Create Ethernet packet
         eth_pkt = ethernet.ethernet(
-            src='11:22:33:44:55:66',  # Source MAC address (server)
-            dst='12:34:56:78:90:ab',  # Destination MAC address (client)
-            ethertype=ethernet.ether.ETH_TYPE_IP  # EtherType (IPv4)
+            src='2c:8d:b1:6d:e6:0b',  # Source MAC address (server)
+            dst=pkt.get_protocol(ethernet.ethernet).dst,  # Destination MAC address (client)
+            ethertype=pkt.get_protocol(ethernet.ethernet).ethertype  # EtherType (IPv4)
         )
-        eth_pkt.serialize()
+        # print('???????????????????????')
         # Assemble the packets
-        eth_pkt.set_payload(ipv4_pkt)
-        ipv4_pkt.set_payload(udp_pkt)
-        udp_pkt.set_payload(dhcp_pkt)
-        packet_data = eth_pkt.serialize()
-        return packet_data
+        packet1 = packet.Packet()
+        packet1.add_protocol(eth_pkt)
+        packet1.add_protocol(ipv4_pkt)
+        packet1.add_protocol(udp_pkt)
+        packet1.add_protocol(dhcp_pkt)
+        # print(packet1)
+        return packet1
 
     @classmethod
     def handle_dhcp(cls, datapath, port, pkt):
-        dhcp_pkt = pkt.get_protocol(dhcp.dhcp)
-        if dhcp_pkt.option_dhcp_message_type == dhcp.DHCP_DISCOVER:
-            # DHCP DISCOVER packet received
+        # print(pkt.get_protocol(dhcp.dhcp))
+        pkt_dhcp = pkt.get_protocol(dhcp.dhcp)
+        if pkt_dhcp.options.option_list[0].value == b'\x01':
+            print('dhcp_pktover')
+            # DHCP dhcp_pktOVER packet received
             # You may choose an available IP from the IP pool and generate DHCP OFFER packet
             # Then send the generated packet to the host
-            offer_pkt = cls.assemble_offer(dhcp_pkt, datapath)
+            offer_pkt = cls.assemble_offer(pkt, datapath)
             cls._send_packet(datapath, port, offer_pkt)
-        elif dhcp_pkt.option_dhcp_message_type == dhcp.DHCP_REQUEST:
+
+        elif pkt_dhcp.options.option_list[0].value == b'\x03':
+            print('request')
             # DHCP REQUEST packet received
             # You should send ACK packet and set the yiaddr field to the chosen IP address
-            ack_pkt = cls.assemble_ack(datapath, port, dhcp_pkt)
+            ack_pkt = cls.assemble_ack(datapath, port, pkt)
             cls._send_packet(datapath, port, ack_pkt)
+
         else:
             # Unsupported DHCP message type
             return
-
-    '''
-    datapath：表示一个连接到 OVS 网桥的交换机。
-    port：表示这个数据包要从交换机上的哪个虚拟端口出去。
-    pkt：待发送出去的数据包。一个 PacketIn 事件数据包
-    '''
 
     @classmethod
     def _send_packet(cls, datapath, port, pkt):
@@ -159,7 +209,3 @@ class DHCPServer():
                                   actions=actions,
                                   data=data)
         datapath.send_msg(out)
-
-
-if __name__ == "__main__":
-    pass
