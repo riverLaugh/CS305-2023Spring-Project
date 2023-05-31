@@ -18,6 +18,7 @@ from ofctl_utilis import OfCtl
 
 
 class ControllerApp(app_manager.RyuApp):
+    arp_map = {}
     Graph = Graph()
     arpTable = {}
     OFP_VERSIONS = [ofproto_v1_0.OFP_VERSION]
@@ -50,7 +51,7 @@ class ControllerApp(app_manager.RyuApp):
     @set_ev_cls(event.EventHostAdd)
     def handle_host_add(self, ev):
         print("host_add")
-        host = Host(mac=ev.host.mac, ipv4=ev.host.ipv4[0], dpid=ev.host.dpid)
+        host = Host(ev.host)
         host.isswitch = False
         # ev.host.port.dpid
         for nde in self.Graph.nodes:
@@ -58,7 +59,11 @@ class ControllerApp(app_manager.RyuApp):
                 if nde.dpid == ev.host.port.dpid:
                     self.Graph.add_host(switch=nde, host=host, port1=ev.host.port)
                     break
-        # self.Graph.update_flow_table()
+        # print(self.Graph.nodes)
+        # print("?????????????????????????????????")
+        # print(self.Graph.graph)
+        # print("-----------------------------------")
+        self.Graph.update_flow_table()
 
         """
         Event handler indiciating a host has joined the network
@@ -81,16 +86,16 @@ class ControllerApp(app_manager.RyuApp):
         print('handle_link_add')
         global nodeA, nodeB
         for nde in self.Graph.nodes:
-            if nde.dpid == ev.link.src.dpid:
+            if isinstance(nde,Switch) and nde.dpid == ev.link.src.dpid:
                 nodeA = nde
                 break
         for nde in self.Graph.nodes:
-            if nde.dpid == ev.link.dst.dpid:
+            if isinstance(nde,Switch) and nde.dpid == ev.link.dst.dpid:
                 nodeB = nde
                 break
         self.Graph.add_link(nodeA, nodeB, ev.link.src, ev.link.dst)
         self.Graph.update_flow_table()
-        print(self.Graph.graph)
+        # print(self.Graph.graph)
         """
         Event handler indicating a link between two switches has been added
         """
@@ -144,18 +149,26 @@ class ControllerApp(app_manager.RyuApp):
                 arp_pkt = pkt.get_protocols(arp.arp)
                 oftcl = OfCtl(datapath, logger=None)
                 if arp_pkt:
-                    print(arp_pkt)
+                    # print(arp_pkt)
                     tag_ip = arp_pkt.dst_ip
                     global mac
+                    flag = False
                     for nde in self.Graph.nodes:
                         if nde.isswitch is False and nde.ip == tag_ip:
                             mac = nde.mac
-                    oftcl.send_arp(vlan_id=VLANID_NONE, arp_opcode=arp.ARP_REPLY, dst_mac=arp_pkt.src_mac,
-                                   sender_mac=mac, sender_ip=arp_pkt.dst_ip,
-                                   target_mac=arp_pkt.src_mac, target_ip=arp_pkt.src_ip,
-                                   src_port=datapath.ofproto.OFPP_CONTROLLER,
-                                   output_port=inPort
-                                   )
+                            flag = True
+                            break
+
+                    if flag:
+                        oftcl.send_arp(vlan_id=VLANID_NONE, arp_opcode=arp.ARP_REPLY, dst_mac=arp_pkt.src_mac,
+                                       sender_mac=mac, sender_ip=arp_pkt.dst_ip,
+                                       target_mac=arp_pkt.src_mac, target_ip=arp_pkt.src_ip,
+                                       src_port=datapath.ofproto.OFPP_CONTROLLER,
+                                       output_port=inPort
+                                       )
+                    else:
+                        self.arp_map[arp_pkt.src_ip] = arp_pkt.src_mac
+
                     ip = arp_pkt.src_ip.spilt('.')  # 192.168.2.2
                     # num = int(ip[3])
                     # host_mac = arp_pkt.src_mac

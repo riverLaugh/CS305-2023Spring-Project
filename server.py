@@ -18,42 +18,89 @@ from ofctl_utilis import OfCtl, VLANID_NONE
 
 class Graph:
     def __init__(self):
+        self.logger = None
         self.graph = {}  # graph = {node:{neibourhood: port}}
         self.nodes = []
+        self.switches = []
+        self.hosts = []
 
     def update_flow_table(self):
         for node in self.nodes:
-            self.find_shortest_path(node)
+            if isinstance(node, Host):
+                self.find_shortest_path(node)
 
-    def find_shortest_path(self, start_node):
-        distance, res = self.dijkstra(start_node)
-        for host in self.graph:
-            if host.isswitch is False and host != start_node:
-                mac = host.mac
-                cur = host
-                while cur != start_node:
-                    cur = res[start_node][0]
-                    port = res[start_node][1]
+    def find_shortest_path(self, host):
+        mydir = self.graph[host]
+        for key in mydir.keys():
+            start_sw = key
+            port = mydir[key]
+        distance, res = self.dijkstra(start_sw)
+        # print("start_node:"+start_node)
+        # print(start_sw)
+        # print(self.nodes)
+        # print("[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]")
+        # print(distance)
+        # print("?????????????????????????????????")
+        # print(res)
+        # print("-----------------------------------")
+        # try:
+        print(start_sw)
+        # print(res)
+        for node in self.graph:
+            if node.isswitch is False and node != start_sw:
+                mac = node.mac  # 从start_sw 到
+                # print(self.graph[node])
+                mydir = self.graph[node]
+                # print(mydir)
+                for key in mydir.keys():
+                    cur = key
+                    port = mydir[key]
+                if cur.isswitch == False:
+                    print("shotest path: is not switch")
+                while cur != start_sw:
+                    # print(f"start_sw :{start_sw}")
+                    # print(f"cur:{cur}")
                     if cur.isswitch is True:
-                        self.add_forwarding_rule(cur.datapath, mac, port.port_no)
+                        self.add_forwarding_rule(datapath=cur.datapath, dl_dst=mac, port=port.port_no)
+                        print(f"{mac}:{port.port_no}")
+                        port = res[cur][1]
+                        cur = res[cur][0]
+        print("-----------------------------------")
 
-    def dijkstra(self, start):
-        res = {}
-        visited = set()
-        distance = {node: sys.maxsize for node in self.nodes}
-        distance[start] = 0
-        # print('graph:'+ str(len(self.graph)))
-        # print('nodes:'+ str(len(self.nodes)))
-        while len(visited) != len(self.nodes):
-            # print(len(visited))
-            tempnode = min(self.graph.keys() - visited, key=lambda k: distance[k])
-            visited.add(tempnode)
-            for neighbour, port in self.graph[tempnode].items():
-                if port._state != 1:
-                    if distance[tempnode] + 1 < distance[neighbour]:
-                        distance[neighbour] = distance[tempnode] + 1
-                        res[neighbour] = (tempnode, port)  # 记录最短路上 , 最近的主机和 node的port
-        return distance, res
+        # except KeyError:
+        #     print("keyError")
+
+    def dijkstra(self, start_sw):  # 传进来的得是个switch
+        try:
+            print(start_sw)
+            res = {}
+            visited = set()
+            # print(visited)
+            # print("[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]")
+            # print(self.nodes)
+            # print("[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]")
+            # print(self.graph)
+            # print("[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]")
+            for host in self.hosts:
+                visited.add(host)
+            distance = {node: sys.maxsize for node in self.nodes}
+            distance[start_sw] = 0
+            while len(visited) != len(self.nodes):
+                # print("ccccccccccccccccc")
+                tempnode = min(self.graph.keys() - visited, key=lambda k: distance[k])
+                visited.add(tempnode)
+                for neighbour, port in self.graph[tempnode].items():
+                    if isinstance(neighbour, Switch) and port._state != 1:  # neibour得是switch
+                        # print("bbbbbbbbbbb")
+                        if distance[tempnode] + 1 < distance[neighbour]:
+                            # print("aaaaaaaaaaaaaaa")
+                            distance[neighbour] = distance[tempnode] + 1
+                            res[neighbour] = (tempnode, port)  # 记录最短路上 , 最近的主机和 node的port
+            print(res)
+            print("------------------------------------------------")
+            return distance, res
+        except KeyError:
+            print()
 
     def add_link(self, sw1, sw2, port1, port2):
         self.link(sw1, sw2, port1)
@@ -83,13 +130,15 @@ class Graph:
     def add_switch(self, swNode):
         self.graph[swNode] = {}
         self.nodes.append(swNode)
+        self.switches.append(swNode)
         pass
 
-    def add_host(self, switch, host, port1):
+    def add_host(self, switch, host, port):
         self.graph[host] = {}
         self.nodes.append(host)
-        self.link(switch, host, port1)
-        self.link(host, switch, None)  # 不知道host的端口
+        self.hosts.append(host)
+        self.link(switch, host, port)
+        self.link(host, switch, port)  # 不知道host的端口
         pass
 
     def link(self, fa1, fa2, port):
@@ -112,16 +161,23 @@ class Graph:
 class Switch:
     def __init__(self, sw):
         self.isswitch = True
-        self.isvisited = False
         self.datapath = sw.dp
         self.dpid = self.datapath.id
 
+    def __repr__(self):
+        return f"Switch({self.dpid})"
+
 
 class Host:
-    def __init__(self, mac, ipv4, dpid, port):
+    def __init__(self, host):
         self.isswitch = False
-        self.isvisited = False
-        self.mac = mac
-        self.ip = ipv4[0]
-        self.dpid = dpid
-        self.port = port
+        self.mac = host.mac
+        self.ip = host.ipv4[0]
+        self.port = host.port
+        # self.dpid = host.dpid
+
+    def __repr__(self):
+        return f"Host({self.ip})"
+
+    def __str__(self):
+        return f"Host({self.ip} ,{self.mac})"
