@@ -23,48 +23,48 @@ class Graph:
         self.nodes = []
         self.switches = []
         self.hosts = []
+        self.count = 0
 
     def update_flow_table(self):
         for node in self.nodes:
             if isinstance(node, Host):
                 self.find_shortest_path(node)
+        print(self.count)
 
     def find_shortest_path(self, host):
         mydir = self.graph[host]
         for key in mydir.keys():
-            start_sw = key
-            port = mydir[key]
+            start_sw = key  # 得到host相连的交换机
+            host_port = mydir[key]
+        # self.add_forwarding_rule(datapath=start_sw.datapath,dl_dst=host.mac,port=host_port)
         distance, res = self.dijkstra(start_sw)
-        # print("start_node:"+start_node)
-        # print(start_sw)
-        # print(self.nodes)
-        # print("[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]")
-        # print(distance)
-        # print("?????????????????????????????????")
-        # print(res)
-        # print("-----------------------------------")
         # try:
-        print(start_sw)
+        # print(f"start_sw={start_sw}")
         # print(res)
         for node in self.graph:
-            if node.isswitch is False and node != start_sw:
+            if node.isswitch is False and node != start_sw:  # 遍历每一个host
                 mac = node.mac  # 从start_sw 到
                 # print(self.graph[node])
                 mydir = self.graph[node]
                 # print(mydir)
                 for key in mydir.keys():
                     cur = key
-                    port = mydir[key]
+                    neigh_port1 = mydir[key]  # port1是该host与交换机相连的端口
+                # self.add_forwarding_rule(datapath=cur.datapath,dl_dst=node.mac,port=neigh_port1)
                 if cur.isswitch == False:
                     print("shotest path: is not switch")
                 while cur != start_sw:
                     # print(f"start_sw :{start_sw}")
                     # print(f"cur:{cur}")
                     if cur.isswitch is True:
-                        self.add_forwarding_rule(datapath=cur.datapath, dl_dst=mac, port=port.port_no)
-                        print(f"{mac}:{port.port_no}")
                         port = res[cur][1]
-                        cur = res[cur][0]
+                        last_cur = res[cur][0]
+                        print(f"dst:{cur}")
+                        self.count += 1
+                        print(self.count)
+                        self.add_forwarding_rule(datapath=last_cur.datapath, dl_dst=mac, port=port.port_no)
+                        print(f"{last_cur}:{port.port_no}:{cur}:{node.mac}")
+                        cur = last_cur
         print("-----------------------------------")
 
         # except KeyError:
@@ -139,6 +139,7 @@ class Graph:
         self.hosts.append(host)
         self.link(switch, host, port)
         self.link(host, switch, port)  # 不知道host的端口
+        self.add_forwarding_rule(datapath=switch.datapath, dl_dst=host.mac, port=port.port_no)
         pass
 
     def link(self, fa1, fa2, port):

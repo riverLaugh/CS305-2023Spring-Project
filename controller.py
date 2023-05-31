@@ -57,7 +57,7 @@ class ControllerApp(app_manager.RyuApp):
         for nde in self.Graph.nodes:
             if nde.isswitch is True:
                 if nde.dpid == ev.host.port.dpid:
-                    self.Graph.add_host(switch=nde, host=host, port1=ev.host.port)
+                    self.Graph.add_host(switch=nde, host=host, port=ev.host.port)
                     break
         # print(self.Graph.nodes)
         # print("?????????????????????????????????")
@@ -149,8 +149,10 @@ class ControllerApp(app_manager.RyuApp):
                 arp_pkt = pkt.get_protocols(arp.arp)
                 oftcl = OfCtl(datapath, logger=None)
                 if arp_pkt:
+                    arp_pkt = arp_pkt[0]
                     # print(arp_pkt)
-                    tag_ip = arp_pkt.dst_ip
+                    tag_ip = arp_pkt.dst_ip #这里会报错？为什么
+                    print(tag_ip)
                     global mac
                     flag = False
                     for nde in self.Graph.nodes:
@@ -169,7 +171,7 @@ class ControllerApp(app_manager.RyuApp):
                     else:
                         self.arp_map[arp_pkt.src_ip] = arp_pkt.src_mac
 
-                    ip = arp_pkt.src_ip.spilt('.')  # 192.168.2.2
+                    # ip = arp_pkt.src_ip.spilt('.')  # 192.168.2.2
                     # num = int(ip[3])
                     # host_mac = arp_pkt.src_mac
                     # host_ip = arp_pkt.src_ip
